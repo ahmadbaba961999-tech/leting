@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>أقلع عن التدخين</title>
+<style>
+:root{--bg:#f4f8f6;--card:#fff;--tx:#14231c;--mu:#5b6b63;--ac:#1f8a5b;--bd:#dfe7e3;--wr:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1713;--card:#18231d;--tx:#e8f1ec;--mu:#9bb0a5;--ac:#3ec58a;--bd:#263a30;--wr:#ff7b6b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1713;--card:#18231d;--tx:#e8f1ec;--mu:#9bb0a5;--ac:#3ec58a;--bd:#263a30;--wr:#ff7b6b;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;line-height:1.6}
+main{max-width:560px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:8px 0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px;margin-bottom:12px}
+.big{font-size:2.4rem;font-weight:700;color:var(--ac);line-height:1.2}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mu{color:var(--mu);font-size:.9rem}
+label{display:block;margin:8px 0 4px;font-size:.9rem}
+input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-size:1rem}
+button{width:100%;margin-top:12px;padding:12px;border:0;border-radius:12px;background:var(--ac);color:#fff;font-size:1rem;font-weight:600}
+button.alt{background:transparent;color:var(--ac);border:1px solid var(--ac)}
+.row{display:flex;gap:8px}
+.bar{height:8px;background:var(--bd);border-radius:8px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--ac)}
+.ms{margin-bottom:12px}
+.ms.done b{color:var(--ac)}
+.over{color:var(--wr)}
+details summary{font-weight:600;cursor:pointer}
+.day{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bd)}
+.day.now{color:var(--ac);font-weight:700}
+#crave{display:none;text-align:center}
+#timer{font-size:2.6rem;font-weight:700;color:var(--ac)}
+</style>
+</head>
+<body>
+<main>
+<h1>🚭 خطتي للإقلاع عن التدخين</h1>
+
+<div id="setup" class="card">
+  <b>ابدأ خطتك من اليوم</b>
+  <label for="c">عدد السجائر اليوم (البداية)</label>
+  <input id="c" type="number" min="1" value="7">
+  <label for="k">عدد أيام التخفيف حتى الإقلاع الكامل</label>
+  <input id="k" type="number" min="7" value="30">
+  <label for="p">سعر علبة السجائر (20 سيجارة)</label>
+  <input id="p" type="number" min="0" step="0.5" value="5">
+  <label for="u">العملة</label>
+  <input id="u" type="text" value="$">
+  <button id="save">ابدأ الخطة</button>
+</div>
+
+<div id="main" style="display:none">
+  <div id="dyn"></div>
+
+  <div class="card">
+    <button id="cr" style="margin:0">أشعر برغبة في التدخين الآن</button>
+    <div id="crave">
+      <div class="mu" style="margin-top:12px">الرغبة تستمر عادة بضع دقائق فقط. انتظر حتى ينتهي العد.</div>
+      <div id="timer">10:00</div>
+      <p id="tip"></p>
+      <button class="alt" id="stop">انتهت الرغبة، أحسنت</button>
+    </div>
+  </div>
+
+  <button class="alt" id="reset">إعادة ضبط الخطة</button>
+</div>
+</main>
+
+<script>
+var KEY="quit-plan", S=null;
+var MS=[
+ [20,"بعد 20 دقيقة: ينخفض معدل ضربات القلب وضغط الدم"],
+ [720,"بعد 12 ساعة: ينخفض أول أكسيد الكربون في الدم إلى المعدل الطبيعي"],
+ [20160,"بعد أسبوعين: تتحسن الدورة الدموية ووظائف الرئة"],
+ [129600,"بعد 3 أشهر: يقل السعال وضيق التنفس بشكل ملحوظ"],
+ [525600,"بعد سنة: ينخفض خطر أمراض القلب إلى النصف تقريباً"]
+];
+var TIPS=["اشرب كوب ماء ببطء.","خذ 10 أنفاس عميقة: شهيق 4 ثوانٍ ثم زفير 6 ثوانٍ.","امشِ قليلاً أو غيّر المكان الذي أنت فيه.","تذكّر لماذا قررت الإقلاع، وتخيل صحتك بعد سنة.","اتصل بصديق أو اكتب له رسالة الآن.","امضغ علكة أو تناول قطعة فاكهة."];
+function $(i){return document.getElementById(i)}
+function load(){try{var v=localStorage.getItem(KEY);return v?JSON.parse(v):null}catch(e){return null}}
+function store(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function pad(n){return n<10?"0"+n:""+n}
+function key(t){var d=new Date(t);return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function allow(d){return Math.max(0,Math.ceil(S.cpd*(1-d/S.days)))}
+function midnight(){var n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate()).getTime()}
+function addDays(t,n){var d=new Date(t);d.setDate(d.getDate()+n);return d.getTime()}
+function fmt(min){var d=Math.floor(min/1440),h=Math.floor(min%1440/60),m=Math.floor(min%60);return d+" يوم، "+h+" ساعة، "+m+" دقيقة"}
+function planSaved(upTo){
+  var s=0;
+  for(var d=0;d<upTo&&d<S.days;d++){s+=Math.max(0,S.cpd-(S.log[key(addDays(S.start,d))]||0))}
+  return s;
+}
+function money(cigs){return (cigs/20*S.price).toFixed(1)+" "+S.cur}
+function render(){
+  if(!S)return;
+  var idx=Math.round((midnight()-S.start)/864e5), h="";
+  if(idx<S.days){
+    var a=allow(idx), k=key(midnight()), sm=S.log[k]||0, left=a-sm;
+    var msg=left>=0?("المتبقي لك اليوم: <b>"+left+"</b>"):'<span class="over">تجاوزت الحد بـ '+(-left)+'. لا بأس، ابدأ غداً من جديد.</span>';
+    h+='<div class="card"><div class="mu">اليوم '+(idx+1)+' من '+S.days+'</div>'
+      +'<div class="big">الحد اليوم: '+a+' سجائر</div>'
+      +'<p>دخّنت اليوم: <b>'+sm+'</b><br>'+msg+'</p>'
+      +'<div class="bar"><i style="width:'+Math.min(100,a?sm/a*100:100)+'%"></i></div>'
+      +'<div class="row"><button onclick="chg(1)">+ دخّنت سيجارة</button><button class="alt" onclick="chg(-1)">تراجع</button></div></div>';
+    h+='<div class="grid"><div class="card"><div class="mu">أيام حتى الإقلاع الكامل</div><div class="big" style="font-size:1.8rem">'+(S.days-idx)+'</div></div>'
+      +'<div class="card"><div class="mu">وفرت حتى الآن</div><div class="big" style="font-size:1.8rem">'+money(planSaved(idx))+'</div></div></div>';
+    var q=new Date(addDays(S.start,S.days)).toLocaleDateString("ar",{day:"numeric",month:"long",year:"numeric"});
+    h+='<div class="card"><details><summary>جدول الأيام (الإقلاع الكامل: '+q+')</summary><div style="margin-top:8px">';
+    for(var d=0;d<S.days;d++){h+='<div class="day'+(d===idx?' now':'')+'"><span>اليوم '+(d+1)+'</span><span>'+allow(d)+' سجائر</span></div>'}
+    h+='<div class="day"><span>اليوم '+(S.days+1)+'</span><span>صفر 🎉</span></div></div></details></div>';
+  }else{
+    var qt=addDays(S.start,S.days), min=Math.max(0,(Date.now()-qt)/60000);
+    var days=Math.floor(min/1440), saved=planSaved(S.days)+days*S.cpd+Math.floor(min%1440/1440*S.cpd);
+    h+='<div class="card"><div class="mu">أنت بلا تدخين منذ</div><div class="big">'+fmt(min)+'</div></div>'
+      +'<div class="grid"><div class="card"><div class="mu">سجائر لم تدخنها</div><div class="big" style="font-size:1.8rem">'+saved+'</div></div>'
+      +'<div class="card"><div class="mu">المال الذي وفرته</div><div class="big" style="font-size:1.8rem">'+money(saved)+'</div></div></div>';
+    h+='<div class="card"><b>فوائد الإقلاع لصحتك</b><div style="margin-top:12px">';
+    MS.forEach(function(x){var p=Math.min(100,min/x[0]*100);h+='<div class="ms'+(p>=100?' done':'')+'">'+(p>=100?'<b>✓ </b>':'')+x[1]+'<div class="bar"><i style="width:'+p+'%"></i></div></div>'});
+    h+='</div></div>';
+  }
+  $("dyn").innerHTML=h;
+}
+function chg(n){
+  var k=key(midnight());
+  S.log[k]=Math.max(0,(S.log[k]||0)+n);
+  store();render();
+}
+function show(){
+  $("setup").style.display=S?"none":"block";
+  $("main").style.display=S?"block":"none";
+  render();
+}
+var tm=null,left=600;
+function tick(){
+  left--;
+  if(left<=0){clearInterval(tm);left=0;$("tip").textContent="أحسنت! مرّت الرغبة. أنت أقوى منها."}
+  $("timer").textContent=pad(Math.floor(left/60))+":"+pad(left%60);
+}
+$("cr").onclick=function(){
+  $("crave").style.display="block";$("cr").style.display="none";
+  left=600;$("timer").textContent="10:00";
+  $("tip").textContent=TIPS[Math.floor(Math.random()*TIPS.length)];
+  clearInterval(tm);tm=setInterval(tick,1000);
+};
+$("stop").onclick=function(){clearInterval(tm);$("crave").style.display="none";$("cr").style.display="block"};
+$("save").onclick=function(){
+  S={start:midnight(),cpd:+$("c").value||7,days:+$("k").value||30,price:+$("p").value||0,cur:$("u").value||"$",log:{}};
+  store();show();
+};
+$("reset").onclick=function(){if(confirm("هل تريد حذف الخطة والبدء من جديد؟")){S=null;try{localStorage.removeItem(KEY)}catch(e){}show()}};
+S=load();show();setInterval(render,60000);
+</script>
+</body>
+</html>
